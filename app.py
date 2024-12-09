@@ -4,28 +4,82 @@ from tensorflow.keras.models import load_model
 import cv2
 import numpy as np
 import os
+from PIL import Image
 
-# Load the model
-@st.cache_resource  # Caches the loaded model to avoid reloading on every app interaction
+# Custom CSS for modern UI
+def local_css():
+    st.markdown("""
+    <style>
+    .title {
+        background-image: linear-gradient(to right, #4c6ff4, #7f3df3);
+        color: white;
+        text-align: center;
+        font-weight: bold;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    .subtitle {
+        color: #34495e;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .stFile {
+        background-color: white;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .prediction-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 1rem;
+    }
+    .prediction-box {
+        padding: 1rem;
+        border-radius: 10px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+    .normal {
+        background-color: #2ecc71;
+        color: white;
+    }
+    .cancer {
+        background-color: #e74c3c;
+        color: white;
+    }
+    .sidebar-info {
+        background-color: #f0f2f6;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Load the model with enhanced error handling
+@st.cache_resource
 def load_model_from_file(model_path):
     try:
         model = load_model(model_path)
-        st.success("Model loaded successfully!")
         return model
     except Exception as e:
-        st.error(f"Error loading model: {e}")
+        st.error(f"❌ Error loading model: {e}")
         st.stop()
 
-# Preprocess the input image
+# Advanced image preprocessing
 def preprocess_image(image):
     # Convert to RGB if needed
-    if image.shape[-1] == 4:  # RGBA
+    if len(image.shape) == 3 and image.shape[2] == 4:  # RGBA
         image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-    elif image.shape[-1] == 1:  # Grayscale
+    elif len(image.shape) == 2:  # Grayscale
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
 
-    # Resize to match model's input size
-    image = cv2.resize(image, (150, 150))
+    # Resize with anti-aliasing
+    image = cv2.resize(image, (150, 150), interpolation=cv2.INTER_AREA)
 
     # Normalize pixel values
     image = image / 255.0
@@ -35,124 +89,90 @@ def preprocess_image(image):
 
     return image
 
-# Predict using the model
+# Predict using the model with confidence interpretation
 def predict_image(model, image):
     prediction = model.predict(image)
-    return prediction[0][0]
+    confidence = prediction[0][0]
+    return confidence
 
-# Streamlit App
 def main():
-    st.title("Lung Cancer Detection System")
-    st.write("Upload a chest X-ray image to predict lung cancer.")
+    # Set page config
+    st.set_page_config(
+        page_title="Lung Cancer Detector",
+        page_icon="🫁",
+        layout="centered"
+    )
 
-    # Load the model
-    model_path = r"model/lung_cancer_model.h5"  # Adjust path as needed
+    # Apply custom CSS
+    local_css()
+
+    # Title and Subtitle
+    st.markdown('<h1 class="title">Lung Cancer Detection System 🫁</h1>', unsafe_allow_html=True)
+    st.markdown('<h3 class="subtitle">AI-Powered Chest X-ray Analysis</h3>', unsafe_allow_html=True)
+
+    # Model Loading
+    model_path = r"model/lung_cancer_model.h5"
     if not os.path.exists(model_path):
-        st.error("Model file not found. Please ensure the correct path.")
+        st.error("❌ Model file not found. Please check the file path.")
         return
+    
     model = load_model_from_file(model_path)
 
-    # Upload an image
-    uploaded_file = st.file_uploader("Upload a chest X-ray image", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
-        # Read the uploaded file
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    # File Uploader with Enhanced UI
+    uploaded_file = st.file_uploader(
+        "Upload Chest X-ray Image", 
+        type=["jpg", "jpeg", "png"],
+        help="Upload a chest X-ray image for lung cancer detection",
+        label_visibility="collapsed"
+    )
 
-        # Display the image
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+    if uploaded_file is not None:
+        # Read and display image
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Chest X-ray", use_container_width=True)
+
+        # Convert PIL Image to OpenCV format
+        image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
         # Preprocess and predict
-        processed_image = preprocess_image(image)
+        processed_image = preprocess_image(image_cv)
         prediction = predict_image(model, processed_image)
 
-        # Display the prediction
+        # Prediction Display with Detailed Interpretation
+        st.markdown('<div class="prediction-container">', unsafe_allow_html=True)
         if prediction > 0.5:
-            st.warning(f"Prediction: Cancer Detected (Confidence: {prediction:.2f})")
+            st.markdown(f'''
+            <div class="prediction-box cancer">
+                ⚠️ Potential Lung Cancer Detected
+                <br>Confidence: {prediction*100:.2f}%
+            </div>
+            ''', unsafe_allow_html=True)
+            st.warning("🚨 Please consult a medical professional for further evaluation.")
+            st.info("Recommendations:")
+            st.info("- Schedule a follow-up chest X-ray or CT scan to confirm the diagnosis")
+            st.info("- Consider discussing treatment options with an oncologist if cancer is confirmed")
         else:
-            st.success(f"Prediction: Normal (Confidence: {1 - prediction:.2f})")
+            st.markdown(f'''
+            <div class="prediction-box normal">
+                ✅ No Cancer Detected
+                <br>Confidence: {(1-prediction)*100:.2f}%
+            </div>
+            ''', unsafe_allow_html=True)
+            st.info("Regular health check-ups are recommended to monitor your lung health.")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Additional Information
+    # st.sidebar.markdown('<div class="sidebar-info">', unsafe_allow_html=True)
+    st.sidebar.markdown("""
+    ## About This App 🏥
+    - **Purpose**: Early Lung Cancer Detection
+    - **Technology**: Deep Learning AI
+    - **Model**: Trained on Chest X-ray Datasets
+    - **Disclaimer**: Not a Substitute for Professional Medical Advice
+    """)
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
 
-
-# import streamlit as st
-# import tensorflow as tf
-# from tensorflow.keras.models import Sequential
-# from tensorflow.keras.layers import Flatten, Dense, Dropout
-# from tensorflow.keras import regularizers
-# import numpy as np
-# import cv2
-# from PIL import Image
-
-
-# class LungCancerDetectionSystem:
-#     def __init__(self):
-#         # Define the model architecture
-#         self.model = Sequential()
-#         self.model.add(Flatten(input_shape=(150, 150, 3)))  # Input shape (150x150x3)
-#         self.model.add(Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.01)))
-#         self.model.add(Dropout(0.1))
-#         self.model.add(Dense(128, activation='relu', kernel_regularizer=regularizers.l2(0.01)))
-#         self.model.add(Dropout(0.1))
-#         self.model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01)))
-#         self.model.add(Dropout(0.1))
-#         self.model.add(Dense(32, activation='relu', kernel_regularizer=regularizers.l2(0.01)))
-#         self.model.add(Dropout(0.1))
-#         self.model.add(Dense(1, activation='sigmoid'))
-
-#         # Compile the model
-#         self.model.compile(
-#             optimizer=tf.keras.optimizers.RMSprop(learning_rate=1e-5),
-#             loss='binary_crossentropy',
-#             metrics=['accuracy']
-#         )
-
-#     def load_weights(self, weights_path):
-#         # Load pre-trained weights
-#         self.model.load_weights(weights_path)
-
-#     def preprocess_image(self, image):
-#         # Convert image to RGB if needed and resize to 150x150
-#         if image.mode != 'RGB':
-#             image = image.convert('RGB')
-#         image_array = np.array(image)
-#         image_resized = cv2.resize(image_array, (150, 150))
-#         return np.expand_dims(image_resized / 255.0, axis=0)  # Normalize and add batch dimension
-
-#     def predict(self, image):
-#         # Predict on the preprocessed image
-#         return self.model.predict(image)[0][0]  # Return the probability
-
-
-# # Streamlit Application
-# def main():
-#     st.title("Lung Cancer Detection System")
-#     st.write("Upload a chest X-ray image to predict whether it indicates lung cancer.")
-
-#     # Initialize the detection system
-#     detector = LungCancerDetectionSystem()
-#     detector.load_weights(r'model/lung_cancer_model.h5')  # Update with your model weights file path
-
-#     # Image Upload
-#     uploaded_file = st.file_uploader("Upload a Chest X-ray Image", type=["jpg", "jpeg", "png"])
-#     if uploaded_file is not None:
-#         # Display uploaded image
-#         image = Image.open(uploaded_file)
-#         st.image(image, caption="Uploaded Image", use_column_width=True)
-
-#         # Preprocess and Predict
-#         if st.button("Predict"):
-#             try:
-#                 preprocessed_image = detector.preprocess_image(image)
-#                 prediction = detector.predict(preprocessed_image)
-#                 if prediction > 0.5:
-#                     st.success(f"The model predicts **Lung Cancer** with a confidence of {prediction:.2f}.")
-#                 else:
-#                     st.success(f"The model predicts **Normal** with a confidence of {1 - prediction:.2f}.")
-#             except Exception as e:
-#                 st.error(f"An error occurred: {e}")
-
-
-# if __name__ == "__main__":
-#     main()

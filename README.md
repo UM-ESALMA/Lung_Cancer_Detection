@@ -18,3 +18,9 @@ conda init
 ```bash
 conda activate /workspaces/Lung_Cancer_Detection/venv 
 ```
+
+3. Run the app
+
+```bash
+streamlit run app.py
+```
