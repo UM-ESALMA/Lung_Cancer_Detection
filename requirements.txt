@@ -1,5 +1,5 @@
 
-tenserflow
+tensorflow
 numpy
 pandas
 ipykernel
