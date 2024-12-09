@@ -1,0 +1,6 @@
+
+tenserflow
+numpy
+pandas
+ipykernel
+pandas
