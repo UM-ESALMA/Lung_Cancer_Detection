@@ -1,2 +1,20 @@
-# Lung_Cancer_Detection
-Source Code of Lung Cancer Detection Web App
+
+----
+
+# ***`Lung Cancer Detection`***
+
+- Source Code of Lung Cancer Detection Web App
+
+----
+
+1. Initialize the Environment.
+
+```bash
+conda init
+```
+
+2. Activate the Environment.
+
+```bash
+conda activate /workspaces/Lung_Cancer_Detection/venv 
+```
